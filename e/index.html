@@ -24,6 +24,11 @@
   .secondary { background: transparent; color: inherit; border: 1.5px solid currentColor; }
   .small { font-size: 14px; color: var(--muted); margin-top: 18px; }
   .small a { color: inherit; }
+  .item { display: flex; align-items: center; gap: 12px; padding: 10px 0; text-align: start; }
+  .item + .item { border-top: 1px solid rgba(127,127,127,.25); }
+  .item .ie { font-size: 30px; }
+  .item b { display: block; font-size: 18px; }
+  .item span { color: var(--muted); font-size: 15px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -34,6 +39,7 @@
     <div class="emoji" id="emoji">📅</div>
     <h1 id="title"></h1>
     <div class="when" id="when"></div>
+    <div id="list" hidden></div>
   </div>
   <div id="bad" hidden><p id="badText"></p></div>
   <div id="actions">
@@ -62,7 +68,8 @@
     var bin = atob(b64), bytes = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     ev = JSON.parse(new TextDecoder().decode(bytes));
-    if (typeof ev.d !== "number") ev = null;
+    if (ev.k === "o") { if (!Array.isArray(ev.l) || !ev.l.length) ev = null; }
+    else if (typeof ev.d !== "number") ev = null;
   } catch (e) { ev = null; }
   if (!ev) {
     document.getElementById("card").hidden = true;
@@ -71,24 +78,57 @@
     document.getElementById("badText").textContent = T.bad;
     return;
   }
-  var date = new Date(ev.d * 1000);
   var loc = ar ? "ar-u-nu-latn" : "en";
+  function utc(d) { return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); }
+  var esc = function (s) { return String(s).replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, " "); };
+  var ib = document.getElementById("ics");
+  var open = document.getElementById("open");
+  if (ev.k === "o") {
+    // Occasions: a list, added to iPlan or to the phone's calendar every year.
+    var one = ev.l.length === 1;
+    T.open = ar ? (one ? "أضف المناسبة إلى iPlan" : "أضف المناسبات إلى iPlan") : (one ? "Add to iPlan" : "Add all to iPlan");
+    document.title = ar ? (one ? "مناسبة من iPlan" : "مناسبات من iPlan") : "Occasions from iPlan";
+    document.getElementById("emoji").hidden = true;
+    document.getElementById("title").textContent = document.title;
+    var list = document.getElementById("list");
+    list.hidden = false;
+    var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//iPlan//EN"];
+    ev.l.forEach(function (o, n) {
+      var d = new Date(o.d * 1000);
+      var row = document.createElement("div"); row.className = "item";
+      var ie = document.createElement("div"); ie.className = "ie"; ie.textContent = o.e || "🎂";
+      var tx = document.createElement("div");
+      var b = document.createElement("b"); b.textContent = o.t || "";
+      var sp = document.createElement("span"); sp.textContent = d.toLocaleDateString(loc, { day: "numeric", month: "long" });
+      tx.appendChild(b); tx.appendChild(sp); row.appendChild(ie); row.appendChild(tx); list.appendChild(row);
+      var day = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+      var next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+      var dayEnd = next.getFullYear() + String(next.getMonth() + 1).padStart(2, "0") + String(next.getDate()).padStart(2, "0");
+      lines.push("BEGIN:VEVENT", "UID:" + o.d + "-" + n + "-" + Math.random().toString(36).slice(2) + "@iplan", "DTSTAMP:" + utc(new Date()),
+        "DTSTART;VALUE=DATE:" + day, "DTEND;VALUE=DATE:" + dayEnd, "RRULE:FREQ=YEARLY",
+        "SUMMARY:" + esc((o.e ? o.e + " " : "") + (o.t || "")), "END:VEVENT");
+    });
+    lines.push("END:VCALENDAR");
+    open.textContent = T.open;
+    open.href = "iplan://occasion#" + payload;
+    ib.textContent = T.ics;
+    ib.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(lines.join("\r\n"));
+    document.getElementById("get").innerHTML = T.get;
+    return;
+  }
+  var date = new Date(ev.d * 1000);
   document.getElementById("emoji").textContent = ev.e || "📅";
   document.getElementById("title").textContent = ev.t || T.title;
   document.getElementById("when").textContent =
     date.toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " · " +
     date.toLocaleTimeString(loc, { hour: "numeric", minute: "2-digit" });
-  var open = document.getElementById("open");
   open.textContent = T.open;
   open.href = "iplan://event#" + payload;
-  function utc(d) { return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); }
-  var esc = function (s) { return String(s).replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\;").replace(/\n/g, " "); };
   var ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//iPlan//EN", "BEGIN:VEVENT",
     "UID:" + ev.d + "-" + Math.random().toString(36).slice(2) + "@iplan", "DTSTAMP:" + utc(new Date()),
     "DTSTART:" + utc(date), "DTEND:" + utc(new Date(date.getTime() + 3600000)),
     "SUMMARY:" + esc((ev.e ? ev.e + " " : "") + (ev.t || "")), "X-IPLAN-EMOJI:" + (ev.e || ""),
     "END:VEVENT", "END:VCALENDAR"].join("\r\n");
-  var ib = document.getElementById("ics");
   ib.textContent = T.ics;
   ib.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
   document.getElementById("get").innerHTML = T.get;
