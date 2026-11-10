@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>موعد من iPlan</title>
+<meta property="og:title" content="موعد من iPlan">
+<meta property="og:description" content="اضغط لإضافة الموعد إلى iPlan أو إلى تقويمك">
+<meta property="og:image" content="https://alfarsiomar.github.io/iplan/e/logo.png">
+<style>
+  :root { --green: #0A3331; --cream: #FFEDD1; --card: #ffffff; --muted: #5b6b6a; }
+  @media (prefers-color-scheme: dark) { :root { --cream: #061f1e; --card: #0e3331; --muted: #9fb3b1; } body { color: #fff; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font-family: -apple-system, system-ui, sans-serif; background: var(--cream); color: var(--green);
+         display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+  .wrap { width: 100%; max-width: 420px; text-align: center; }
+  .logo { width: 72px; height: 72px; border-radius: 18px; }
+  .card { background: var(--card); border-radius: 24px; padding: 24px 20px; margin: 20px 0; }
+  .emoji { font-size: 48px; line-height: 1.2; }
+  h1 { font-size: 24px; margin: 8px 0 6px; }
+  .when { color: var(--muted); font-size: 17px; }
+  a.btn { display: block; text-decoration: none; border-radius: 16px; padding: 15px; font-size: 18px; font-weight: 600; margin-top: 12px; }
+  .primary { background: var(--green); color: #fff; }
+  @media (prefers-color-scheme: dark) { .primary { background: #2a9d8f; } }
+  .secondary { background: transparent; color: inherit; border: 1.5px solid currentColor; }
+  .small { font-size: 14px; color: var(--muted); margin-top: 18px; }
+  .small a { color: inherit; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="logo.png" alt="iPlan">
+  <div class="card" id="card">
+    <div class="emoji" id="emoji">📅</div>
+    <h1 id="title"></h1>
+    <div class="when" id="when"></div>
+  </div>
+  <div id="bad" hidden><p id="badText"></p></div>
+  <div id="actions">
+    <a class="btn primary" id="open"></a>
+    <a class="btn secondary" id="ics" download="event.ics"></a>
+    <div class="small" id="get"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var ar = !/^en/i.test(navigator.language || "ar");
+  if (!ar) { document.documentElement.lang = "en"; document.documentElement.dir = "ltr"; }
+  var T = ar ? {
+    open: "أضف إلى iPlan", ics: "أضف إلى تقويم الجوال", get: "ما عندك iPlan؟ <a href='https://apps.apple.com/app/id6826549893'>حمّله من App Store</a>",
+    bad: "الرابط غير مكتمل.", title: "موعد من iPlan"
+  } : {
+    open: "Add to iPlan", ics: "Add to phone calendar", get: "Don't have iPlan? <a href='https://apps.apple.com/app/id6826549893'>Get it on the App Store</a>",
+    bad: "This link is incomplete.", title: "Event from iPlan"
+  };
+  document.title = T.title;
+  var payload = location.hash.slice(1);
+  var ev = null;
+  try {
+    var b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    ev = JSON.parse(new TextDecoder().decode(bytes));
+    if (typeof ev.d !== "number") ev = null;
+  } catch (e) { ev = null; }
+  if (!ev) {
+    document.getElementById("card").hidden = true;
+    document.getElementById("actions").hidden = true;
+    document.getElementById("bad").hidden = false;
+    document.getElementById("badText").textContent = T.bad;
+    return;
+  }
+  var date = new Date(ev.d * 1000);
+  var loc = ar ? "ar-u-nu-latn" : "en";
+  document.getElementById("emoji").textContent = ev.e || "📅";
+  document.getElementById("title").textContent = ev.t || T.title;
+  document.getElementById("when").textContent =
+    date.toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + " · " +
+    date.toLocaleTimeString(loc, { hour: "numeric", minute: "2-digit" });
+  var open = document.getElementById("open");
+  open.textContent = T.open;
+  open.href = "iplan://event#" + payload;
+  function utc(d) { return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); }
+  var esc = function (s) { return String(s).replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\;").replace(/\n/g, " "); };
+  var ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//iPlan//EN", "BEGIN:VEVENT",
+    "UID:" + ev.d + "-" + Math.random().toString(36).slice(2) + "@iplan", "DTSTAMP:" + utc(new Date()),
+    "DTSTART:" + utc(date), "DTEND:" + utc(new Date(date.getTime() + 3600000)),
+    "SUMMARY:" + esc((ev.e ? ev.e + " " : "") + (ev.t || "")), "X-IPLAN-EMOJI:" + (ev.e || ""),
+    "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  var ib = document.getElementById("ics");
+  ib.textContent = T.ics;
+  ib.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+  document.getElementById("get").innerHTML = T.get;
+})();
+</script>
+</body>
+</html>
