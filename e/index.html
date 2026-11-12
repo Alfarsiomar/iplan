@@ -49,7 +49,7 @@
   </div>
 </div>
 <script>
-(function () {
+(async function () {
   var ar = !/^en/i.test(navigator.language || "ar");
   if (!ar) { document.documentElement.lang = "en"; document.documentElement.dir = "ltr"; }
   var T = ar ? {
@@ -63,12 +63,26 @@
   var payload = location.hash.slice(1);
   var ev = null;
   try {
-    var b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    // New links start with "z": the JSON is squeezed with deflate so long lists stay short.
+    var packed = payload.charAt(0) === "z";
+    var b64 = (packed ? payload.slice(1) : payload).replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4) b64 += "=";
     var bin = atob(b64), bytes = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    if (packed) {
+      var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    }
     ev = JSON.parse(new TextDecoder().decode(bytes));
-    if (ev.k === "o") { if (!Array.isArray(ev.l) || !ev.l.length) ev = null; }
+    if (ev.k === "o") {
+      if (!Array.isArray(ev.l) || !ev.l.length) ev = null;
+      // Occasions as [name, yyyymmdd, emoji] in new links; turned into {t, d, e} for the page.
+      else ev.l = ev.l.map(function (o) {
+        if (!Array.isArray(o)) return o;
+        var ymd = o[1], d = new Date(Math.floor(ymd / 10000), Math.floor(ymd / 100) % 100 - 1, ymd % 100, 12);
+        return { t: o[0], d: Math.floor(d.getTime() / 1000), e: o[2] || "🎂" };
+      });
+    }
     else if (typeof ev.d !== "number") ev = null;
   } catch (e) { ev = null; }
   if (!ev) {
