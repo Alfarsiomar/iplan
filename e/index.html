@@ -63,6 +63,12 @@
   var payload = location.hash.slice(1);
   var ev = null;
   try {
+    // Short links («#s» + id): the code is kept in iPlan's database; fetch it first.
+    if (/^s[A-Za-z0-9]{6,20}$/.test(payload)) {
+      var res = await fetch("https://firestore.googleapis.com/v1/projects/iplan-dbe26/databases/(default)/documents/shares/" +
+        payload.slice(1) + "?key=AIzaSyBsl0LPETQhHBTsGidB8R8O0OkhTtZBchw");
+      payload = res.ok ? ((await res.json()).fields || {}).c.stringValue : "";
+    }
     // New links start with "z": the JSON is squeezed with deflate so long lists stay short.
     var packed = payload.charAt(0) === "z";
     var b64 = (packed ? payload.slice(1) : payload).replace(/-/g, "+").replace(/_/g, "/");
