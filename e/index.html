@@ -80,7 +80,11 @@
       bytes = new Uint8Array(await new Response(stream).arrayBuffer());
     }
     ev = JSON.parse(new TextDecoder().decode(bytes));
-    if (ev.k === "o") {
+    if (ev.k === "e") {
+      // Several events: [title, seconds, emoji] each.
+      if (!Array.isArray(ev.l) || !ev.l.length) ev = null;
+      else ev.l = ev.l.map(function (o) { return Array.isArray(o) ? { t: o[0], d: o[1], e: o[2] || "📅" } : o; });
+    } else if (ev.k === "o") {
       if (!Array.isArray(ev.l) || !ev.l.length) ev = null;
       // Occasions as [name, yyyymmdd, emoji] in new links; turned into {t, d, e} for the page.
       else ev.l = ev.l.map(function (o) {
@@ -109,6 +113,38 @@
   var esc = function (s) { return String(s).replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, " "); };
   var ib = document.getElementById("ics");
   var open = document.getElementById("open");
+  if (ev.k === "e") {
+    // Several events: a list with day and time, added to iPlan or to the phone's calendar.
+    var oneE = ev.l.length === 1;
+    T.open = ar ? (oneE ? "أضف الموعد إلى iPlan" : "أضف المواعيد إلى iPlan") : (oneE ? "Add to iPlan" : "Add all to iPlan");
+    document.title = ar ? (oneE ? "موعد من iPlan" : "مواعيد من iPlan") : "Events from iPlan";
+    document.getElementById("emoji").hidden = true;
+    document.getElementById("title").textContent = document.title;
+    var listE = document.getElementById("list");
+    listE.hidden = false;
+    var linesE = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//iPlan//EN"];
+    ev.l.forEach(function (o, n) {
+      var d = new Date(o.d * 1000);
+      var row = document.createElement("div"); row.className = "item";
+      var ie = document.createElement("div"); ie.className = "ie"; ie.textContent = o.e || "📅";
+      var tx = document.createElement("div");
+      var b = document.createElement("b"); b.textContent = o.t || "";
+      var sp = document.createElement("span");
+      sp.textContent = d.toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }) + " · " +
+        d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      tx.appendChild(b); tx.appendChild(sp); row.appendChild(ie); row.appendChild(tx); listE.appendChild(row);
+      linesE.push("BEGIN:VEVENT", "UID:" + o.d + "-" + n + "-" + Math.random().toString(36).slice(2) + "@iplan", "DTSTAMP:" + utc(new Date()),
+        "DTSTART:" + utc(d), "DTEND:" + utc(new Date(d.getTime() + 3600000)),
+        "SUMMARY:" + esc((o.e ? o.e + " " : "") + (o.t || "")), "X-IPLAN-EMOJI:" + (o.e || ""), "END:VEVENT");
+    });
+    linesE.push("END:VCALENDAR");
+    open.textContent = T.open;
+    open.href = "iplan://event#" + plain({ k: "e", l: ev.l.map(function (o) { return { t: o.t, d: o.d, e: o.e }; }) });
+    ib.textContent = T.ics;
+    ib.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(linesE.join("\r\n"));
+    document.getElementById("get").innerHTML = T.get;
+    return;
+  }
   if (ev.k === "o") {
     // Occasions: a list, added to iPlan or to the phone's calendar every year.
     var one = ev.l.length === 1;
