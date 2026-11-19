@@ -93,6 +93,8 @@
         return { t: o[0], d: Math.floor(d.getTime() / 1000), e: o[2] || "🎂" };
       });
     }
+    // A shared list invitation: {k: "l", i: list id, n: list name}.
+    else if (ev.k === "l") { if (typeof ev.i !== "string" || !ev.i) ev = null; }
     else if (typeof ev.d !== "number") ev = null;
   } catch (e) { ev = null; }
   if (!ev) {
@@ -142,6 +144,18 @@
     open.href = "iplan://event#" + plain({ k: "e", l: ev.l.map(function (o) { return { t: o.t, d: o.d, e: o.e }; }) });
     ib.textContent = T.ics;
     ib.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(linesE.join("\r\n"));
+    document.getElementById("get").innerHTML = T.get;
+    return;
+  }
+  if (ev.k === "l") {
+    // An invitation to a shared list: opens iPlan, which joins it (an iPlan account is needed).
+    document.title = ar ? "دعوة إلى قائمة في iPlan" : "Invitation to a list in iPlan";
+    document.getElementById("emoji").textContent = "📝";
+    document.getElementById("title").textContent = ev.n || document.title;
+    document.getElementById("when").textContent = ar ? "دعوة للانضمام إلى قائمة مشتركة في iPlan" : "An invitation to join a shared list in iPlan";
+    open.textContent = ar ? "انضم إلى القائمة" : "Join the list";
+    open.href = "iplan://joinlist#" + plain({ k: "l", i: ev.i, n: ev.n || "" });
+    ib.hidden = true;
     document.getElementById("get").innerHTML = T.get;
     return;
   }
